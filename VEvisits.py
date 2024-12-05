@@ -46,6 +46,7 @@ logs_folder = "Dyno"  # NOTE: may need to change depending on location of log fi
 completed_stuff_folder = 'VEVisits_data' # folder that files from this program will be stored to
 completed_logs_path = 'completed_logs.txt' # list of files that have been parsed successfully and are represented in the heatmap
 current_counts_path = "current_counts.csv" # current heatmap data as a dataframe
+current_cylPhiDiff_path = "current_cylPhiDiff.csv" # current heatmap data as a dataframe
 current_heatmap_path = 'heatmap_output.png' # current heatmap as a png
 
 count = 0 # counter for number of cells visited in a file
@@ -73,9 +74,12 @@ else:
 if not os.path.exists(os.path.join(completed_stuff_folder,current_counts_path)) or True:  # first execution of program
     # Create an empty dataframe with RPM and MAP buckets as columns
     df_counts = pd.DataFrame(index=rpmBreaks, columns=mapBreaks)
-    print(df_counts)
     df_counts = df_counts.fillna(0)  # Initialize all counts to 0
     df_counts.to_csv(os.path.join(completed_stuff_folder,current_counts_path), index=True, header=True)
+    
+    df_cylPhiDiff = pd.DataFrame(index=rpmBreaks, columns=loadBreaks)
+    df_cylPhiDiff = df_cylPhiDiff.fillna(0)  # Initialize all counts to 0
+    df_cylPhiDiff.to_csv(os.path.join(completed_stuff_folder,current_cylPhiDiff_path), index=True, header=True)
 else:
     try:
         df_counts = pd.read_csv(os.path.join(completed_stuff_folder,current_counts_path), index_col=0)
@@ -115,7 +119,7 @@ def update_counts(row):
     rpm_bucket = get_bucket(row, rpmBreaks, 'RPM[RPM]')
     map_bucket = get_bucket(row, mapBreaks, 'Plenum_MAP[kPa]')
 
-    if row["Steady_State_Op[bool]"] == 1.0: # adaptation possible
+    if row["Steady_State_Op[bool]"] == 1.0 and row["RPM[RPM]"] >= rpmBreaks[0]: # adaptation possible
         # increment the corresponding cell in the heatmap dataframe
         df_counts.loc[rpm_bucket, map_bucket] += 1
         count += 1
@@ -129,17 +133,22 @@ def deal_with_mdf(input_path):
     mdf_file.export_to_csv('temp.csv')
     
     # try to read the csv with one set of channels. use xls nomenclature
-    df = pd.read_csv('temp.csv', low_memory=False, usecols=["t", "RPM", "Plenum_MAP", "Steady_State_Op"])[1:]
+    df = pd.read_csv('temp.csv', low_memory=False, usecols=["t", "RPM", "Plenum_MAP", "Steady_State_Op", "Cyl1_Phi", "Cyl2_Phi", "Target_Phi"])[1:]
+    
     df.rename(columns={'t': 't[s]',
                         'RPM': 'RPM[RPM]',
-                        "Plenum_MAP" : "Plenum_MAP[kPa]",
-                        'Steady_State_Op': 'Steady_State_Op[bool]'}, inplace=True)
-    #finally:
-    #    os.remove('temp.csv') # get rid of this temporary file
-        
-    # if these reading steps don't work, this file will be aborted
-    df = df.apply(pd.to_numeric) # make all values numbers
-    #df['CLVEAdapting[bool]'] = np.where(df['CLVEAdapting[bool]'] > 0.5, 1.0, 0.0) #if booleans are not boolean, interpolate
+                        'Plenum_MAP' : 'Plenum_MAP[kPa]',
+                        'Steady_State_Op': 'Steady_State_Op[bool]',
+                        'Cyl1_Phi': 'Cyl1_Phi[EqRatio]', 
+                        'Cyl2_Phi': 'Cyl2_Phi[EqRatio]', 
+                        'Target_Phi': 'Target_Phi[EqRatio]'
+                        }, inplace=True)
+    
+    # get rid of the temporary file
+    #os.remove('temp.csv')
+    
+    # make all values numbers
+    df = df.apply(pd.to_numeric)
     
     return df
 
