@@ -70,9 +70,9 @@ else:
         print("""Check that the VEVisits_data folder exists in this directory and that the contents include 
         completed_logs.txt, current_counts.csv, and heatmap_output.png. If not, delete VEVisits_data and rerun.""")
 
-if not os.path.exists(os.path.join(completed_stuff_folder,current_counts_path)):  # first execution of program
+if not os.path.exists(os.path.join(completed_stuff_folder,current_counts_path)) or True:  # first execution of program
     # Create an empty dataframe with RPM and MAP buckets as columns
-    df_counts = pd.DataFrame(index=rpmBreaks[1:], columns=mapBreaks[1:])
+    df_counts = pd.DataFrame(index=rpmBreaks, columns=mapBreaks)
     print(df_counts)
     df_counts = df_counts.fillna(0)  # Initialize all counts to 0
     df_counts.to_csv(os.path.join(completed_stuff_folder,current_counts_path), index=True, header=True)
@@ -90,7 +90,7 @@ else:
 """For a given row of a log, find out which cell in the VE Map it corresponds to."""
 def get_bucket(row, buckets, channel):
     val = row[channel] # will be either RPM or MAP
-    my_buckets = buckets.copy()[1:] #remove dummy bin 
+    my_buckets = buckets.copy() #remove dummy bin 
     # find bin above and below val. return the bin that val is closer to.
     for pot_val_idx in range(len(buckets)):
         try:
