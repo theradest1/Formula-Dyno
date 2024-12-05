@@ -18,6 +18,8 @@ however, the program will attempt to process them.
 4. If only error messages are displayed before displaying output, you should still trust the output.
 5. If multiple files of the same name with different extensions are available, the mdf, then xls, then csv will be tried."""
 
+
+from scipy.interpolate import RegularGridInterpolator
 import mdfreader
 import pandas as pd
 import os
@@ -260,28 +262,39 @@ def make_heatmap(df, title, savedImg_path):
     #show the heatmap (and continue the script)
     plt.show(block=False)
 
-def make_3d_graph(df, title, savedImg_path, smoothing = 0):
-    #create figure and set screen size
-    fig = plt.figure(figsize=(10, 10))
+
+def make_3d_graph(df, title, savedImg_path, smoothing = 0, subdivisions = 1):
+    # Create a figure and a 3D axis
+    fig = plt.figure(figsize=(25, 15))
     ax = fig.add_subplot(111, projection='3d')
 
-    #get data from the dataframe
+    # Get data from the DataFrame
     x = np.arange(df.shape[1])  # Number of columns
     y = np.arange(df.shape[0])  # Number of rows
     X, Y = np.meshgrid(x, y)
 
-    # Smooth the data using a Gaussian filter
-    Z = ndimage.gaussian_filter(df.values, sigma=1)
+    # Subdivide the grid for higher resolution
+    x_new = np.linspace(0, df.shape[1] - 1, df.shape[1] * subdivisions)  # Double the resolution
+    y_new = np.linspace(0, df.shape[0] - 1, df.shape[0] * subdivisions)
+    X_new, Y_new = np.meshgrid(x_new, y_new)
 
-    # Create a 3D surface plot
-    surf = ax.plot_surface(X, Y, Z, cmap='coolwarm', edgecolor='k', linewidth=0.2, alpha=0.8)
+    # Interpolate Z values for the subdivided grid using RegularGridInterpolator
+    interpolator = RegularGridInterpolator((y, x), df.values, method='linear')
+    points = np.array([(yi, xi) for yi in y_new for xi in x_new])
+    Z_new = interpolator(points).reshape(len(y_new), len(x_new))
+    
+    # Smooth the data using a Gaussian filter
+    Z_new_smooth = ndimage.gaussian_filter(Z_new, sigma=smoothing)
+
+    # Create a 3D surface plot with the subdivided grid
+    surf = ax.plot_surface(X_new, Y_new, Z_new_smooth, cmap='coolwarm', edgecolor='k', linewidth=(0.2 if subdivisions == 1 else 0), alpha=1)
 
     # Customize the axes
     ax.set_xticks(np.arange(len(df.columns)))
     ax.set_xticklabels(df.columns, rotation=90, fontsize=13)
     ax.set_yticks(np.arange(len(df.index)))
     ax.set_yticklabels(df.index, fontsize=13)
-    ax.set_zlabel('Value', fontsize=13)
+    ax.set_zlabel('Values', fontsize=13)
 
     # Set the title
     ax.set_title(title, fontsize=24, fontweight='bold', pad=20)
@@ -342,13 +355,17 @@ def main():
         make_3d_graph(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path)
         make_3d_graph(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path)
         make_3d_graph(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path)
-    else:
+    elif int(displayMode) == 2:
+        make_3d_graph(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path, 5, 10)
+        make_3d_graph(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path, 5, 10)
+        make_3d_graph(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path, 5, 10)
+    else: 
         smoothing = float(input("\nSmoothing Factor:"))
+        subdivisions = int(input("Subdivisions:"))
         print()
-        make_3d_graph(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path, smoothing)
-        make_3d_graph(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path, smoothing)
-        make_3d_graph(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path, smoothing)
-        
+        make_3d_graph(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path, smoothing, subdivisions)
+        make_3d_graph(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path, smoothing, subdivisions)
+        make_3d_graph(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path, smoothing, subdivisions)
     
 #start program
 main()
