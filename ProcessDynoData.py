@@ -24,6 +24,7 @@ import os
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.ndimage as ndimage
 
 """Recursively searches through the parent of all log folders to be looked through. 
 The log folder must be located in the same directory as this script. The log folder can be infinitely deep."""
@@ -237,7 +238,7 @@ def parse_data(input_path):
 
 """Makes and saves the heatmap."""
 def make_heatmap(df, title, savedImg_path):
-    # set the figure size (adjust as needed)
+    #create figure and set screen size
     fig, ax = plt.subplots(figsize=(25, 15))
     
     # move x-axis ticks to the top
@@ -259,6 +260,40 @@ def make_heatmap(df, title, savedImg_path):
     #show the heatmap (and continue the script)
     plt.show(block=False)
 
+def make_3d_graph(df, title, savedImg_path, smoothing = 0):
+    #create figure and set screen size
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    #get data from the dataframe
+    x = np.arange(df.shape[1])  # Number of columns
+    y = np.arange(df.shape[0])  # Number of rows
+    X, Y = np.meshgrid(x, y)
+
+    # Smooth the data using a Gaussian filter
+    Z = ndimage.gaussian_filter(df.values, sigma=1)
+
+    # Create a 3D surface plot
+    surf = ax.plot_surface(X, Y, Z, cmap='coolwarm', edgecolor='k', linewidth=0.2, alpha=0.8)
+
+    # Customize the axes
+    ax.set_xticks(np.arange(len(df.columns)))
+    ax.set_xticklabels(df.columns, rotation=90, fontsize=13)
+    ax.set_yticks(np.arange(len(df.index)))
+    ax.set_yticklabels(df.index, fontsize=13)
+    ax.set_zlabel('Value', fontsize=13)
+
+    # Set the title
+    ax.set_title(title, fontsize=24, fontweight='bold', pad=20)
+
+    # Add a color bar
+    fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
+
+    # Save the figure
+    plt.savefig(os.path.join(completed_stuff_folder, savedImg_path), bbox_inches='tight')
+
+    # Show the plot
+    plt.show(block=False)
 
 """Runs all code in this file."""
 def main():
@@ -298,10 +333,23 @@ def main():
     df_phiOffset.to_csv(os.path.join(completed_stuff_folder, phiOffset_path), index=True, header=True)
 
     # display the heatmap
-    make_heatmap(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path)
-    make_heatmap(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path)
-    make_heatmap(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path)
-
+    displayMode = input("\n0: heatmap (default)\n1: 3D raw\n2: 3D smooth\n>>")
+    if  displayMode == "" or int(displayMode) == 0:
+        make_heatmap(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path)
+        make_heatmap(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path)
+        make_heatmap(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path)
+    elif int(displayMode) == 1:
+        make_3d_graph(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path)
+        make_3d_graph(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path)
+        make_3d_graph(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path)
+    else:
+        smoothing = float(input("\nSmoothing Factor:"))
+        print()
+        make_3d_graph(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path, smoothing)
+        make_3d_graph(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path, smoothing)
+        make_3d_graph(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path, smoothing)
+        
+    
 #start program
 main()
 
