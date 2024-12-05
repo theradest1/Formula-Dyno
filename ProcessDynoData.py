@@ -18,7 +18,6 @@ however, the program will attempt to process them.
 4. If only error messages are displayed before displaying output, you should still trust the output.
 5. If multiple files of the same name with different extensions are available, the mdf, then xls, then csv will be tried."""
 
-#import required modules. if missing any, do "pip install <module name>" in your terminal.
 import mdfreader
 import pandas as pd
 import os
@@ -31,16 +30,50 @@ The log folder must be located in the same directory as this script. The log fol
 def get_relative_paths(folder_path):
     relative_paths = []
 
+    #loop through all folders
     for root, dirs, files in os.walk(folder_path):
+        
+        #loop through all files in folder
         for file in files:
+            
+            #get the path to the file
             file_path = os.path.join(root, file)
             relative_path = os.path.relpath(file_path, folder_path)
             
-            # only selects files of supported types (.xls, .csv, and .mdf)
+            # only get .mdf files
             if relative_path.upper().endswith(".MDF"):
                 relative_paths.append(os.path.join(folder_path, relative_path))
 
     return relative_paths
+
+def getDataframe(df_path, index_breaks, columns_breaks):
+    #combine data folder path and csv path
+    totalPath = os.path.join(completed_stuff_folder,df_path)
+    
+    try:
+        #read the file
+        dataframe = pd.read_csv(totalPath, index_col=0)
+        
+        #convert all breaks to floats
+        dataframe.index = dataframe.index.astype(float)
+        
+        #convert data to floats
+        dataframe.columns = dataframe.columns.astype(float)
+    except:
+        #delete the csv if it exists
+        if os.path.exists(totalPath):
+            os.remove(totalPath)
+            
+        #create an empty dataframe
+        dataframe = pd.DataFrame(index=index_breaks, columns=columns_breaks, dtype=float)
+        
+        #fill it with zeros
+        dataframe = dataframe.fillna(0)
+        
+        #write to a file
+        dataframe.to_csv(totalPath, index=True, header=True)
+    
+    return dataframe
 
 #paths
 logs_folder = "Dyno"  # NOTE: may need to change depending on location of log files.
@@ -56,75 +89,62 @@ cylPhiDiff_heatmap_path = 'cylPhiDiff_heatmap.png' # current heatmap as a png
 phiOffset_path = "phiOffset.csv" # current heatmap data as a dataframe
 phiOffset_heatmap_path = 'phiOffset_heatmap.png' # current heatmap as a png
 
-count = 0 # counter for number of cells visited in a file
-
 filepaths = get_relative_paths(logs_folder)
 
-# bins from the VE map. add a dummy first bin to make pandas happy.
+count = 0 # counter for number of cells visited in a file
+
+#the breakpoints for the heatmaps
 loadBreaks = [0.00, 7.69, 15.38, 23.08, 30.77, 38.46, 46.15, 53.85, 61.54, 69.23, 76.92, 84.62, 92.31, 100.00, 105.13, 110.27, 115.40]
 rpmBreaks = [1750.00, 2359.38, 2968.75, 3578.13, 4187.50, 4796.88, 5406.25, 6015.63, 6625.00, 7234.38, 7843.75, 8453.13, 9062.50, 9671.88, 10281.25, 10890.63, 11500.00]
 mapBreaks = [18.00, 23.06, 28.13, 33.19, 38.25, 43.31, 48.38, 53.44, 58.50, 63.56, 68.63, 73.69, 78.75, 83.81, 88.88, 93.94, 99.00]
 
-if not os.path.exists(completed_stuff_folder):  # first execution of program
+#if processed data folder doesnt exist, create
+if not os.path.exists(completed_stuff_folder):
+    #create processed data folder
     os.mkdir(completed_stuff_folder)
+    
+    #initialize data
     completed_logs = []
-    with open(os.path.join(completed_stuff_folder, completed_logs_path), 'w'):  # create a blank file
-        pass
-else:
-    try:
-        with open(os.path.join(completed_stuff_folder,completed_logs_path), 'r') as file:
-            completed_logs = [line.strip() for line in file]
-    except Exception as e:
-        print("""Check that the VEVisits_data folder exists in this directory and that the contents include 
-        completed_logs.txt, counts.csv, and heatmap_output.png. If not, delete VEVisits_data and rerun.""")
-
-if not os.path.exists(os.path.join(completed_stuff_folder,counts_path)):  # first execution of program
-    # Create an empty dataframe with RPM and MAP buckets as columns
-    df_counts = pd.DataFrame(index=rpmBreaks, columns=mapBreaks, dtype=float)
-    df_counts = df_counts.fillna(0)  # Initialize all counts to 0
-    df_counts.to_csv(os.path.join(completed_stuff_folder,counts_path), index=True, header=True)
     
-    df_cylPhiDiff = pd.DataFrame(index=rpmBreaks, columns=loadBreaks, dtype=float)
-    df_cylPhiDiff = df_cylPhiDiff.fillna(0)  # Initialize all counts to 0
-    df_cylPhiDiff.to_csv(os.path.join(completed_stuff_folder,cylPhiDiff_path), index=True, header=True)
-    
-    df_phiOffset = pd.DataFrame(index=rpmBreaks, columns=mapBreaks, dtype=float)
-    df_phiOffset = df_phiOffset.fillna(0)  # Initialize all counts to 0
-    df_phiOffset.to_csv(os.path.join(completed_stuff_folder,phiOffset_path), index=True, header=True)
+    #create blank completed logs folder
+    open(os.path.join(completed_stuff_folder,completed_logs_path), 'w')
 else:
-    try:
-        df_counts = pd.read_csv(os.path.join(completed_stuff_folder, counts_path), index_col=0)
-        df_counts.index = df_counts.index.astype(float)
-        df_counts.columns = df_counts.columns.astype(float)
-        
-        df_cylPhiDiff = pd.read_csv(os.path.join(completed_stuff_folder, cylPhiDiff_path), index_col=0)
-        df_cylPhiDiff.index = df_cylPhiDiff.index.astype(float)
-        df_cylPhiDiff.columns = df_cylPhiDiff.columns.astype(float)
-        
-        df_phiOffset = pd.read_csv(os.path.join(completed_stuff_folder, phiOffset_path), index_col=0)
-        df_phiOffset.index = df_phiOffset.index.astype(float)
-        df_phiOffset.columns = df_phiOffset.columns.astype(float)
-    except Exception as e:
-        print("""Check that the VEVisits_data folder exists in this directory and that the contents include 
-        completed_logs.txt, counts.csv, and heatmap_output.png. If not, delete VEVisits_data and rerun.""")
+    #get parsed mdf files from file
+    with open(os.path.join(completed_stuff_folder,completed_logs_path), 'r') as file:
+        completed_logs = [line.strip() for line in file]
 
+#load or create data files if they arent there
+df_counts = getDataframe(counts_path, rpmBreaks, mapBreaks)
+df_cylPhiDiff = getDataframe(cylPhiDiff_path, rpmBreaks, loadBreaks)
+df_phiOffset = getDataframe(phiOffset_path, rpmBreaks, mapBreaks)
+    
 """For a given row of a log, find out which cell in the VE Map it corresponds to."""
 def get_bucket(row, buckets, channel):
-    val = row[channel] # will be either RPM or MAP
-    my_buckets = buckets.copy() #remove dummy bin 
-    # find bin above and below val. return the bin that val is closer to.
+    #get the value of the channel
+    val = row[channel]
+    
+    # loop through bin value indexes
     for pot_val_idx in range(len(buckets)):
         try:
+            #get lower and upper bin values
             lower_bound = buckets[pot_val_idx]
             upper_bound = buckets[pot_val_idx+1]
+            
+            #if it is between the bounds
             if val >= lower_bound and val <= upper_bound:
+                
+                #get the middle of the two bounds
                 rng = upper_bound - lower_bound
                 crit = rng/2 + lower_bound
+                
+                #return the bound that is closer
                 if val > crit:
                     return upper_bound
                 else:
                     return lower_bound
-        except IndexError as e: # val was either bigger or smaller than the range of buckets.
+        
+        #if the value is outside of the range (an index error would happens)
+        except IndexError as e:
             if val >= buckets[len(buckets)-1]:
                 return buckets[len(buckets)-1]
             else:
@@ -143,14 +163,23 @@ def update_dataframes(row):
     if row["Steady_State_Op[bool]"] == 1.0 and row["RPM[RPM]"] >= rpmBreaks[0]:
         count += 1
         
+        #get how many values have been averaged
         pastBucketCount = df_counts.loc[rpm_bucket, map_bucket]
+        
+        #increment for the future
         df_counts.loc[rpm_bucket, map_bucket] = pastBucketCount + 1
         
+        #calculate the ratio between cylendar phi values
         cylPhiDiff = row["Cyl1_Phi[EqRatio]"] / row["Cyl2_Phi[EqRatio]"]
+        
+        #add to the average
         newCylPhiDiffAvg = (df_cylPhiDiff.loc[rpm_bucket, load_bucket]*pastBucketCount + cylPhiDiff)/(pastBucketCount + 1)
         df_cylPhiDiff.loc[rpm_bucket, load_bucket] = newCylPhiDiffAvg
         
+        #get phi offset by subtracting the average cyl phi by the target phi
         phiOffset = (row["Cyl1_Phi[EqRatio]"] + row["Cyl2_Phi[EqRatio]"])/2 - row["Target_Phi[EqRatio]"]
+        
+        #add to the average
         newPhiOffsetAvg = (df_phiOffset.loc[rpm_bucket, map_bucket]*pastBucketCount + phiOffset)/(pastBucketCount + 1)
         df_phiOffset.loc[rpm_bucket, map_bucket] = newPhiOffsetAvg
 
@@ -165,6 +194,7 @@ def deal_with_mdf(input_path):
     # try to read the csv with one set of channels. use xls nomenclature
     df = pd.read_csv('temp.csv', low_memory=False, usecols=["t", "RPM", "Plenum_MAP", "Steady_State_Op", "Cyl1_Phi", "Cyl2_Phi", "Target_Phi", "Load"])[1:]
     
+    #be fancy and add units
     df.rename(columns={'t': 't[s]',
                         'RPM': 'RPM[RPM]',
                         'Plenum_MAP' : 'Plenum_MAP[kPa]',
@@ -185,6 +215,7 @@ def deal_with_mdf(input_path):
 
 """Checks if a filepath has already been successfully read"""
 def already_done(filepath):
+    #loop through file paths of parsed files
     for pot_filepath in completed_logs:
         if filepath == pot_filepath:
             return True
@@ -192,52 +223,67 @@ def already_done(filepath):
 
 """Parses a given file path by filetype. Updates the heatmap dataframe accordingly."""
 def parse_data(input_path):
+    #parse sensor data
     sensor_data = deal_with_mdf(input_path)
-    print("Done parsing.")
     
-    # start counting how many cells in this file
+    #start counting how many cells in this file
     count_before = count
     
-    # calculate the visits and add to heatmap dataframe
+    #calculate heatmaps
     sensor_data.apply(update_dataframes, axis=1)
     count_after = count
     
-    print(f"{count_after-count_before} datapoints were added for a total of {count_after}\n")
+    print(f"{count_after-count_before} datapoints were added")
 
 """Makes and saves the heatmap."""
 def make_heatmap(df, title, savedImg_path):
-    fig, ax = plt.subplots(figsize=(25, 15))  # set the figure size (adjust as needed)
-    ax.xaxis.tick_top()  # move x-axis ticks to the top
+    # set the figure size (adjust as needed)
+    fig, ax = plt.subplots(figsize=(25, 15))
+    
+    # move x-axis ticks to the top
+    ax.xaxis.tick_top()
+    
+    #make heatmap
     heatmap = sns.heatmap(df, annot=True, cmap='coolwarm', fmt='g', cbar = False, ax=ax)
     
-    # adjust axis tick label orientation and size
+    #set axis tick label orientation and size
     heatmap.set_xticklabels(heatmap.get_xticklabels(), rotation=0, fontsize=13)
     heatmap.set_yticklabels(heatmap.get_yticklabels(), rotation=0, fontsize=13)
     
+    #set the title
     plt.suptitle(title, fontsize=24, fontweight='bold', y=0.95)
     
-    # Save the heatmap to a file
+    #save the heatmap to a file
     plt.savefig(os.path.join(completed_stuff_folder, savedImg_path), bbox_inches='tight')
+    
+    #show the heatmap
     plt.show()
 
 
 """Runs all code in this file."""
 def main():
     # parse all filepaths in the logs folder
-    
     addedFiles = 0
     for filepath in filepaths:
+        
+        #if the file hasnt been parsed in the past
         if not already_done(filepath):
             try:
                 print("Now parsing: " + filepath)
+                
+                #create heatmaps from data
                 parse_data(filepath)
+                
+                #add to completed logs
                 completed_logs.append(filepath)
+                
                 addedFiles += 1
             except ValueError as e:
                 print(e)
                 print(filepath + " could not be parsed. The required channels may not be available in this log.\n")
                 continue
     
+    #a warning if no new data was added
     if addedFiles == 0:
         print("No unparsed mdf files found.\nDelete the processed data folder if you updated a file.")
 
@@ -257,6 +303,3 @@ def main():
     make_heatmap(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path)
 
 main()
-
-
-
