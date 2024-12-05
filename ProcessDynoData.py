@@ -256,8 +256,8 @@ def make_heatmap(df, title, savedImg_path):
     #save the heatmap to a file
     plt.savefig(os.path.join(completed_stuff_folder, savedImg_path), bbox_inches='tight')
     
-    #show the heatmap
-    plt.show()
+    #show the heatmap (and continue the script)
+    plt.show(block=False)
 
 
 """Runs all code in this file."""
@@ -302,4 +302,8 @@ def main():
     make_heatmap(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path)
     make_heatmap(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path)
 
+#start program
 main()
+
+#doesnt close the windows automatically
+plt.show()
