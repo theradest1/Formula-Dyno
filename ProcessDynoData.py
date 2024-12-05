@@ -11,10 +11,10 @@ LIMITATIONS:
 4. The parent folder of the logs must be specified if it is different form the value in "logs_folder"
 
 NOTES:
-1. Progress over time is saved in the folder "VEVisits_data". If you want to recalculate everything, delete this folder.
+1. Progress over time is saved in the folder "Processed_Data". If you want to recalculate everything, delete this folder.
 2. Other file file types may be saved in the logs folder. This program will ignore them. If they are of a readable, type, 
 however, the program will attempt to process them. 
-3. The final output of the program is the .png file in VEVisits_data.
+3. The final output of the program is the .png file in Processed_Data.
 4. If only error messages are displayed before displaying output, you should still trust the output.
 5. If multiple files of the same name with different extensions are available, the mdf, then xls, then csv will be tried."""
 
@@ -183,16 +183,15 @@ def deal_with_mdf(input_path):
     
     return df
 
-"""Checks if a filepath has already been successfully read, just in another format."""
+"""Checks if a filepath has already been successfully read"""
 def already_done(filepath):
     for pot_filepath in completed_logs:
-        if filepath[:-4] in pot_filepath[:-4]:
+        if filepath == pot_filepath:
             return True
     return False
 
 """Parses a given file path by filetype. Updates the heatmap dataframe accordingly."""
 def parse_data(input_path):
-    global count
     sensor_data = deal_with_mdf(input_path)
     print("Done parsing.")
     
@@ -203,7 +202,7 @@ def parse_data(input_path):
     sensor_data.apply(update_dataframes, axis=1)
     count_after = count
     
-    print("Done adding to heatmap. " + str(count_after-count_before) + " cells were visited in this file.\n")
+    print(f"{count_after-count_before} datapoints were added for a total of {count_after}\n")
 
 """Makes and saves the heatmap."""
 def make_heatmap(df, title, savedImg_path):
@@ -225,19 +224,22 @@ def make_heatmap(df, title, savedImg_path):
 """Runs all code in this file."""
 def main():
     # parse all filepaths in the logs folder
+    
+    addedFiles = 0
     for filepath in filepaths:
         if not already_done(filepath):
             try:
                 print("Now parsing: " + filepath)
                 parse_data(filepath)
                 completed_logs.append(filepath)
+                addedFiles += 1
             except ValueError as e:
                 print(e)
-                print(filepath + " could not be parsed. The required channels (Time, RPM, Plenum MAP, Steady State, and CLVEAdapting) may not be available in this log.\n")
+                print(filepath + " could not be parsed. The required channels may not be available in this log.\n")
                 continue
-    # temp file can stick around sometimes
-    #if os.path.exists('temp.csv'):
-        #os.remove('temp.csv')
+    
+    if addedFiles == 0:
+        print("No unparsed mdf files found.\nDelete the processed data folder if you updated a file.")
 
     # store the seen logs
     with open(os.path.join(completed_stuff_folder,completed_logs_path), 'w') as file:
