@@ -42,12 +42,19 @@ def get_relative_paths(folder_path):
 
     return relative_paths
 
+#paths
 logs_folder = "Dyno"  # NOTE: may need to change depending on location of log files.
-completed_stuff_folder = 'VEVisits_data' # folder that files from this program will be stored to
+completed_stuff_folder = 'Processed_Data' # folder that files from this program will be stored to
 completed_logs_path = 'completed_logs.txt' # list of files that have been parsed successfully and are represented in the heatmap
-current_counts_path = "current_counts.csv" # current heatmap data as a dataframe
-current_cylPhiDiff_path = "current_cylPhiDiff.csv" # current heatmap data as a dataframe
-current_heatmap_path = 'heatmap_output.png' # current heatmap as a png
+
+counts_path = "counts.csv" # current heatmap data as a dataframe
+counts_heatmap_path = 'counts_heatmap_output.png' # current heatmap as a png
+
+cylPhiDiff_path = "cylPhiDiff.csv" # current heatmap data as a dataframe
+cylPhiDiff_heatmap_path = 'cylPhiDiff_heatmap.png' # current heatmap as a png
+
+phiOffset_path = "phiOffset.csv" # current heatmap data as a dataframe
+phiOffset_heatmap_path = 'phiOffset_heatmap.png' # current heatmap as a png
 
 count = 0 # counter for number of cells visited in a file
 
@@ -69,27 +76,37 @@ else:
             completed_logs = [line.strip() for line in file]
     except Exception as e:
         print("""Check that the VEVisits_data folder exists in this directory and that the contents include 
-        completed_logs.txt, current_counts.csv, and heatmap_output.png. If not, delete VEVisits_data and rerun.""")
+        completed_logs.txt, counts.csv, and heatmap_output.png. If not, delete VEVisits_data and rerun.""")
 
-if not os.path.exists(os.path.join(completed_stuff_folder,current_counts_path)) or True:  # first execution of program
+if not os.path.exists(os.path.join(completed_stuff_folder,counts_path)):  # first execution of program
     # Create an empty dataframe with RPM and MAP buckets as columns
-    df_counts = pd.DataFrame(index=rpmBreaks, columns=mapBreaks)
+    df_counts = pd.DataFrame(index=rpmBreaks, columns=mapBreaks, dtype=float)
     df_counts = df_counts.fillna(0)  # Initialize all counts to 0
-    df_counts.to_csv(os.path.join(completed_stuff_folder,current_counts_path), index=True, header=True)
+    df_counts.to_csv(os.path.join(completed_stuff_folder,counts_path), index=True, header=True)
     
-    df_cylPhiDiff = pd.DataFrame(index=rpmBreaks, columns=loadBreaks)
+    df_cylPhiDiff = pd.DataFrame(index=rpmBreaks, columns=loadBreaks, dtype=float)
     df_cylPhiDiff = df_cylPhiDiff.fillna(0)  # Initialize all counts to 0
-    df_cylPhiDiff.to_csv(os.path.join(completed_stuff_folder,current_cylPhiDiff_path), index=True, header=True)
+    df_cylPhiDiff.to_csv(os.path.join(completed_stuff_folder,cylPhiDiff_path), index=True, header=True)
+    
+    df_phiOffset = pd.DataFrame(index=rpmBreaks, columns=mapBreaks, dtype=float)
+    df_phiOffset = df_phiOffset.fillna(0)  # Initialize all counts to 0
+    df_phiOffset.to_csv(os.path.join(completed_stuff_folder,phiOffset_path), index=True, header=True)
 else:
     try:
-        df_counts = pd.read_csv(os.path.join(completed_stuff_folder,current_counts_path), index_col=0)
-        # Convert indices to integers
-        df_counts.index = df_counts.index.astype(int)
-        # Convert all data to floats
+        df_counts = pd.read_csv(os.path.join(completed_stuff_folder, counts_path), index_col=0)
+        df_counts.index = df_counts.index.astype(float)
         df_counts.columns = df_counts.columns.astype(float)
+        
+        df_cylPhiDiff = pd.read_csv(os.path.join(completed_stuff_folder, cylPhiDiff_path), index_col=0)
+        df_cylPhiDiff.index = df_cylPhiDiff.index.astype(float)
+        df_cylPhiDiff.columns = df_cylPhiDiff.columns.astype(float)
+        
+        df_phiOffset = pd.read_csv(os.path.join(completed_stuff_folder, phiOffset_path), index_col=0)
+        df_phiOffset.index = df_phiOffset.index.astype(float)
+        df_phiOffset.columns = df_phiOffset.columns.astype(float)
     except Exception as e:
         print("""Check that the VEVisits_data folder exists in this directory and that the contents include 
-        completed_logs.txt, current_counts.csv, and heatmap_output.png. If not, delete VEVisits_data and rerun.""")
+        completed_logs.txt, counts.csv, and heatmap_output.png. If not, delete VEVisits_data and rerun.""")
 
 """For a given row of a log, find out which cell in the VE Map it corresponds to."""
 def get_bucket(row, buckets, channel):
@@ -114,15 +131,28 @@ def get_bucket(row, buckets, channel):
                 return buckets[0]
             
 """Go through the rows in a file and figure out what cell to modify and if adaptation was possible"""
-def update_counts(row):
+def update_dataframes(row):
     global count
+    
+    #get bucket
     rpm_bucket = get_bucket(row, rpmBreaks, 'RPM[RPM]')
     map_bucket = get_bucket(row, mapBreaks, 'Plenum_MAP[kPa]')
+    load_bucket = get_bucket(row, loadBreaks, 'Load[%]')
 
-    if row["Steady_State_Op[bool]"] == 1.0 and row["RPM[RPM]"] >= rpmBreaks[0]: # adaptation possible
-        # increment the corresponding cell in the heatmap dataframe
-        df_counts.loc[rpm_bucket, map_bucket] += 1
+    #if in steady state and engine is running
+    if row["Steady_State_Op[bool]"] == 1.0 and row["RPM[RPM]"] >= rpmBreaks[0]:
         count += 1
+        
+        pastBucketCount = df_counts.loc[rpm_bucket, map_bucket]
+        df_counts.loc[rpm_bucket, map_bucket] = pastBucketCount + 1
+        
+        cylPhiDiff = row["Cyl1_Phi[EqRatio]"] / row["Cyl2_Phi[EqRatio]"]
+        newCylPhiDiffAvg = (df_cylPhiDiff.loc[rpm_bucket, load_bucket]*pastBucketCount + cylPhiDiff)/(pastBucketCount + 1)
+        df_cylPhiDiff.loc[rpm_bucket, load_bucket] = newCylPhiDiffAvg
+        
+        phiOffset = (row["Cyl1_Phi[EqRatio]"] + row["Cyl2_Phi[EqRatio]"])/2 - row["Target_Phi[EqRatio]"]
+        newPhiOffsetAvg = (df_phiOffset.loc[rpm_bucket, map_bucket]*pastBucketCount + phiOffset)/(pastBucketCount + 1)
+        df_phiOffset.loc[rpm_bucket, map_bucket] = newPhiOffsetAvg
 
 """Takes in a path to an mdf file and returns a formatted dataframe to be processed in parse_data()"""
 def deal_with_mdf(input_path):
@@ -133,7 +163,7 @@ def deal_with_mdf(input_path):
     mdf_file.export_to_csv('temp.csv')
     
     # try to read the csv with one set of channels. use xls nomenclature
-    df = pd.read_csv('temp.csv', low_memory=False, usecols=["t", "RPM", "Plenum_MAP", "Steady_State_Op", "Cyl1_Phi", "Cyl2_Phi", "Target_Phi"])[1:]
+    df = pd.read_csv('temp.csv', low_memory=False, usecols=["t", "RPM", "Plenum_MAP", "Steady_State_Op", "Cyl1_Phi", "Cyl2_Phi", "Target_Phi", "Load"])[1:]
     
     df.rename(columns={'t': 't[s]',
                         'RPM': 'RPM[RPM]',
@@ -141,11 +171,12 @@ def deal_with_mdf(input_path):
                         'Steady_State_Op': 'Steady_State_Op[bool]',
                         'Cyl1_Phi': 'Cyl1_Phi[EqRatio]', 
                         'Cyl2_Phi': 'Cyl2_Phi[EqRatio]', 
-                        'Target_Phi': 'Target_Phi[EqRatio]'
+                        'Target_Phi': 'Target_Phi[EqRatio]',
+                        'Load': 'Load[%]'
                         }, inplace=True)
     
     # get rid of the temporary file
-    #os.remove('temp.csv')
+    os.remove('temp.csv')
     
     # make all values numbers
     df = df.apply(pd.to_numeric)
@@ -154,9 +185,9 @@ def deal_with_mdf(input_path):
 
 """Checks if a filepath has already been successfully read, just in another format."""
 def already_done(filepath):
-    #for pot_filepath in completed_logs:
-    #    if filepath[:-4] in pot_filepath[:-4]:
-    #        return True
+    for pot_filepath in completed_logs:
+        if filepath[:-4] in pot_filepath[:-4]:
+            return True
     return False
 
 """Parses a given file path by filetype. Updates the heatmap dataframe accordingly."""
@@ -169,20 +200,17 @@ def parse_data(input_path):
     count_before = count
     
     # calculate the visits and add to heatmap dataframe
-    sensor_data.apply(update_counts, axis=1)
+    sensor_data.apply(update_dataframes, axis=1)
     count_after = count
     
     print("Done adding to heatmap. " + str(count_after-count_before) + " cells were visited in this file.\n")
 
 """Makes and saves the heatmap."""
-def make_heatmap():
-    print("Generating heatmap.")
-    
-    title = 'Visits Per Cell in VE Map (RPM vs MAP)'
-    
+def make_heatmap(df, title, savedImg_path):
     fig, ax = plt.subplots(figsize=(25, 15))  # set the figure size (adjust as needed)
     ax.xaxis.tick_top()  # move x-axis ticks to the top
-    heatmap = sns.heatmap(df_counts, annot=True, cmap='coolwarm', fmt='g', cbar = False, ax=ax)
+    heatmap = sns.heatmap(df, annot=True, cmap='coolwarm', fmt='g', cbar = False, ax=ax)
+    
     # adjust axis tick label orientation and size
     heatmap.set_xticklabels(heatmap.get_xticklabels(), rotation=0, fontsize=13)
     heatmap.set_yticklabels(heatmap.get_yticklabels(), rotation=0, fontsize=13)
@@ -190,11 +218,9 @@ def make_heatmap():
     plt.suptitle(title, fontsize=24, fontweight='bold', y=0.95)
     
     # Save the heatmap to a file
-    plt.savefig(os.path.join(completed_stuff_folder,current_heatmap_path), bbox_inches='tight')
+    plt.savefig(os.path.join(completed_stuff_folder, savedImg_path), bbox_inches='tight')
     plt.show()
 
-
-# -
 
 """Runs all code in this file."""
 def main():
@@ -219,10 +245,14 @@ def main():
             file.write(f"{filepath}\n")
 
     # store the current heatmap df
-    df_counts.to_csv(os.path.join(completed_stuff_folder,current_counts_path), index=True, header=True)
+    df_counts.to_csv(os.path.join(completed_stuff_folder,counts_path), index=True, header=True)
+    df_cylPhiDiff.to_csv(os.path.join(completed_stuff_folder, cylPhiDiff_path), index=True, header=True)
+    df_phiOffset.to_csv(os.path.join(completed_stuff_folder, phiOffset_path), index=True, header=True)
 
     # display the heatmap
-    make_heatmap()
+    make_heatmap(df_counts, 'Visits Per Cell (RPM vs MAP)', counts_heatmap_path)
+    make_heatmap(df_cylPhiDiff, 'Cylinder Phi difference (RPM vs Load)', cylPhiDiff_heatmap_path)
+    make_heatmap(df_phiOffset, 'Phi Offset (RPM vs MAP)', phiOffset_heatmap_path)
 
 main()
 
